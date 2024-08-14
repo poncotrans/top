@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fetch Produk JSON</title>
+    <style>
+        /* Styling untuk modal dialog */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgb(0,0,0); 
+            background-color: rgba(0,0,0,0.4); 
+            padding-top: 60px; 
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; 
+            padding: 20px;
+            border: 1px solid #888;
+            width: 80%; 
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+
+        .form-group.row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .form-group.row .half {
+            flex: 1;
+        }
+
+        /* Flexbox untuk game list dan product list */
+        .flex-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .flex-item {
+            flex: 1 1 calc(25% - 20px); /* Empat item dalam satu baris dengan jarak 20px */
+            box-sizing: border-box;
+        }
+
+        .game-item, .product-item, .hot-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .game-item img, .product-item img, .hot-item img {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 10px;
+        }
+
+        .game-item span, .product-item span, .hot-item span {
+            font-size: 16px;
+        }
+
+        .product-item {
+            height: 200px; /* Menentukan tinggi box produk yang sama dengan box game */
+            width: 120px; /* Menentukan lebar box produk yang sama dengan box game */
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 10px;
+        }
+
+        .product-item .price {
+            font-size: 14px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Gotopup Produk</h1>
+
+    <h2>Hot Games:</h2>
+    <div id="hot-games" class="flex-container"></div>
+
+    <h2>Game List:</h2>
+    <div id="game-list" class="flex-container"></div>
+
+    <h2>Selected Game Details:</h2>
+    <div id="product-list" class="flex-container"></div>
+
+    <!-- Modal dialog untuk pembayaran -->
+    <div id="payment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close" id="payment-close">&times;</span>
+            <h2>Payment Information</h2>
+            <div id="payment-info"></div>
+            <button id="cancel-button" style="display:none;">Batal</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.qrcode/1.0/jquery.qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <script>
+        let currentProduct = null;
+
+        // Daftar logo game
+        const gameLogos = {
+            "Valorant": "https://example.com/valorant-logo.png", 
+            "Free Fire": "https://play-lh.googleusercontent.com/nIV146CRuDyVKmYaXWtFR0BK7iZFqq4UyQPfY_iZOqolvk-USWmG9YupzKWDsN59fm6K=w240-h480-rw"
+        };
+
+        async function fetchData() {
+            try {
+                const response = await fetch('https://api.gotopup.id/v1/produk', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'member_code': 'KQQIE-XOPNG-0LX5U-AYUIR-HYIX7'
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const result = await response.json();
+                const games = {};
+
+                result.data.forEach(item => {
+                    if (!games[item.games]) {
+                        games[item.games] = [];
+                    }
+                    games[item.games].push(item);
+                });
+
+                Object.keys(games).forEach(gameName => {
+                    games[gameName].sort((a, b) => parseInt(a.price) - parseInt(b.price));
+                });
+
+                const gameList = document.getElementById('game-list');
+                Object.keys(games).forEach(gameName => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'game-item';
+
+                    const logo = document.createElement('img');
+                    logo.src = gameLogos[gameName] || 'https://via.placeholder.com/120';
+                    logo.alt = gameName;
+
+                    const text = document.createElement('span');
+                    text.textContent = gameName;
+
+                    listItem.appendChild(logo);
+                    listItem.appendChild(text);
+
+                    listItem.onclick = () => {
+                        displayProducts(games[gameName]);
+                        scrollToSelectedGameDetails();
+                    };
+                    gameList.appendChild(listItem);
+                });
+
+                const hotGames = getRandomHotGames(result.data, 3);
+                const hotGameList = document.getElementById('hot-games');
+                hotGames.forEach(game => {
+                    const listItem = document.createElement('li');
+                    listItem.className = 'game-item';
+
+                    const logo = document.createElement('img');
+                    logo.src = gameLogos[game.games] || 'https://via.placeholder.com/120';
+                    logo.alt = game.games;
+
+                    const text = document.createElement('span');
+                    text.textContent = game.games;
+
+                    listItem.appendChild(logo);
+                    listItem.appendChild(text);
+
+                    listItem.onclick = () => {
+                        displayProducts(games[game.games]);
+                        scrollToSelectedGameDetails();
+                    };
+                    hotGameList.appendChild(listItem);
+                });
+
+            } catch (error) {
+                document.getElementById('order-result').textContent = 'Fetch error: ' + error.message;
+            }
+        }
+
+        function displayProducts(gameData) {
+            const productList = document.getElementById('product-list');
+            productList.innerHTML = ''; 
+
+            gameData.forEach(product => {
+                const listItem = document.createElement('li');
+                listItem.className = 'product-item';
+
+                const productName = document.createElement('h3');
+                productName.textContent = product.product;
+
+                const productPrice = document.createElement('p');
+                productPrice.textContent = `Price: ${product.price}`;
+
+                listItem.appendChild(productName);
+                listItem.appendChild(productPrice);
+
+                listItem.onclick = () => showOrderModal(product);
+                productList.appendChild(listItem);
+            });
+        }
+
+        function showOrderModal(product) {
+            const modalContent = document.getElementById('payment-info');
+            modalContent.innerHTML = `
+                <div class="form-group">
+                    <label for="destination">Tujuan:</label>
+                    <input type="text" id="destination" required>
+                </div>
+                <div class="form-group">
+                    <label for="server_id">Server ID:</label>
+                    <input type="text" id="server_id">
+                </div>
+                <button id="pay-button">Bayar</button>
+            `;
+            
+            const payButton = document.getElementById('pay-button');
+            payButton.onclick = () => processPayment(product);
+
+            document.getElementById('payment-modal').style.display = 'block';
+        }
+
+        let uniqueCode = generateUniqueCode();
+
+        async function processPayment(product) {
+            const destination = document.getElementById('destination').value;
+            const serverId = document.getElementById('server_id').value;
+
+            if (!destination) {
+                alert('Mohon isi Tujuan.');
+                return;
+            }
+
+            const refId = uniqueCode;
+            const key = 'd2e3cf7a1bd049961a0d7e6f1e4a15c9';
+            const amount = parseInt(product.price) + 100;
+            const validTime = 300;
+            const service = '11';
+            const signature = md5(`${key}${refId}${service}${amount}${validTime}NewTransaction`);
+
+            try {
+                const response = await fetch('https://api.paydisini.co.id/v1/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        key,
+                        request: 'new',
+                        unique_code: refId,
+                        service,
+                        amount,
+                        note: 'terima kasih',
+                        valid_time: validTime,
+                        type_fee: '1',
+                        payment_guide: 'true',
+                        return: 'google.com',
+                        signature
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    const paymentData = result.data;
+                    const paymentGuide = paymentData.payment_guide && paymentData.payment_guide[0] ? paymentData.payment_guide[0].content : [];
+                    const qrContent = paymentData.qr_content || '';
+
+                    const paymentInfo = `
+                        <p><strong>Status:</strong> ${paymentData.status}</p>
+                        <p><strong>Amount:</strong> ${paymentData.amount}</p>
+                        <h3>SCAN SEKARANG:</h3>
+                        <div id="qrcode"></div>
+                        <p><strong>Expired:</strong> ${paymentData.expired}</p>
+                        
+                    `;
+
+                    document.getElementById('payment-info').innerHTML = paymentInfo;
+
+                    $('#qrcode').qrcode({ text: qrContent });
+
+                    const cancelButton = document.getElementById('cancel-button');
+                    cancelButton.style.display = 'block';
+                    cancelButton.onclick = () => cancelTransaction(refId);
+
+                    
+                } else {
+                    document.getElementById('payment-info').innerHTML = `<p>Error: ${result.msg}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('payment-info').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+
+        
+
+        // Fungsi untuk memeriksa status transaksi pembayaran
+        async function checkPaymentStatus(refId) {
+            const key = 'd2e3cf7a1bd049961a0d7e6f1e4a15c9';
+            const signature = md5(`${key}${refId}StatusTransaction`);
+
+            try {
+                const response = await fetch('https://api.paydisini.co.id/v1/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        key,
+                        request: 'status',
+                        unique_code: refId,
+                        signature
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    const status = result.data.status;
+                    return status;
+                } else {
+                    return 'failed'; 
+                }
+            } catch (error) {
+                console.error(`Error: ${error.message}`);
+                return 'failed'; 
+            }
+        }
+
+        // Fungsi untuk hash md5
+        function md5(string) {
+            return CryptoJS.MD5(string).toString();
+        }
+
+        // Fungsi untuk membatalkan transaksi
+        async function cancelTransaction(refId) {
+            const key = 'd2e3cf7a1bd049961a0d7e6f1e4a15c9';
+            const signature = md5(`${key}${refId}CancelTransaction`);
+
+            try {
+                const response = await fetch('https://api.paydisini.co.id/v1/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        key,
+                        request: 'cancel',
+                        unique_code: refId,
+                        signature
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    document.getElementById('payment-info').innerHTML = `<p>Transaksi dibatalkan.</p>`;
+                } else {
+                    document.getElementById('payment-info').innerHTML = `<p>Error: ${result.msg}</p>`;
+                }
+            } catch (error) {
+                document.getElementById('payment-info').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        }
+
+        function generateUniqueCode() {
+            const timestamp = Date.now().toString().slice(-8);
+            const randomDigits = Math.floor(Math.random() * 900) + 100;
+            return `${timestamp}${randomDigits}`;
+        }
+
+        function getRandomHotGames(gameList, numberOfGames) {
+            const shuffled = gameList.sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, numberOfGames);
+        }
+
+        function scrollToSelectedGameDetails() {
+            const selectedGameDetails = document.getElementById('product-list');
+            selectedGameDetails.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        window.onload = fetchData;
+
+        document.getElementById('payment-close').onclick = function() {
+            document.getElementById('payment-modal').style.display = 'none';
+        };
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('payment-modal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
+            }
+        };
+    </script>
+</body>
+</html>
